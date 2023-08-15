@@ -1,0 +1,60 @@
+\documentclass{article}
+
+\usepackage[T1,T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,russian]{babel}
+\usepackage{fancyvrb}
+
+\begin{document}
+
+\section{Основные структуры данных}
+
+Уравнение в свободных полгруппах \texttt{t.Eq} представляется в виде
+\begin{Verbatim}
+  t.Eq ::= ((AreEqual (e.LHS) (e.RHS)) (e.Constrs) (e.Conds)).
+\end{Verbatim}
+Выражения \texttt{e.LHS} и \texttt{e.RHS} - сооответственно левая и правая
+части уравнения, состоящие из произвольного числа констант \texttt{t.Const} и
+переменных \texttt{t.Var}.
+\begin{Verbatim}
+  t.Const ::= (s.CHAR s.NUMBER);
+  t.Var ::= (Var s.CHAR).
+\end{Verbatim}
+Выражение \texttt{e.Constrs} представляет \textit{ограничения на переменные}
+уравнения в конъюнктивной нормальной форме. Элементами дизъюнкций являются
+\textit{рестрикции} \texttt{t.Restr}. Рестрикции бывают \textit{суффиксными}
+\texttt{t.SuffixRestr}, \textit{префиксными} \texttt{t.PrefixRestr} и
+рестрикциями \textit{на пустоту} \texttt{t.EmptyRestr}:
+\begin{Verbatim}
+  t.Restr ::= t.SuffixRestr | t.PrefixRestr | t.EmptyRestr;
+  t.SuffixRestr ::= (not t.Const ends t.Var);
+  t.PrefixRestr ::= (not t.Const starts t.Var);
+  t.EmptyRestr ::= (not empty t.Var).
+\end{Verbatim}
+Ограничение может включать в себя одну или две рестрикции и называться в
+соответствии с этим \textit{тривиальным} \texttt{t.TrivialConstr} или
+\textit{нетривиальным} \texttt{t.NonTrivialConstr}. Таким образом, существует
+четыре вида ограничений.
+\begin{Verbatim}
+  t.Constr ::= t.TrivialConstr | NonTrivialConstr;
+  t.TrivialConstr ::= (OR t.Restr);
+  t.NonTrivialConstr ::= (OR t.SuffixRestr t.PrefixRestr).
+\end{Verbatim}
+Наконец, выражение \texttt{e.Conds} представляет \textit{условия на константы}.
+Константа может являться результатом сжатия в пару или в блок, поэтому
+выделяют два вида условий:
+\begin{Verbatim}
+  t.Cond ::= t.PairCond | t.BlockCond;
+  t.PairCond ::= (t.Const is t.SimpleBlock t.SimpleBlock);
+  t.BlockCond ::= (t.Const is t.ArbitaryBlock),
+\end{Verbatim}
+где блок \texttt{t.Block} есть степень константы с показателями
+\texttt{t.Exp}:
+\begin{Verbatim}
+  t.Block ::= t.SimpleBlock | t.ArbitaryBlock;
+  t.SimpleBlock ::= (t.Const /* нет иных показателей */ (const 1));
+  t.ArbitaryBlock ::= (t.Const t.Exp* (const s.NUMBER));
+  t.Exp ::= (s.WORD s.NUMBER).
+\end{Verbatim}
+
+\end{document}
