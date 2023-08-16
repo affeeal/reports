@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[12pt]{article}
 
 \usepackage[T1,T2A]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -7,54 +7,163 @@
 
 \begin{document}
 
-\section{Основные структуры данных}
+\section{Теоретическая основа}
 
-Уравнение в свободных полгруппах \texttt{t.Eq} представляется в виде
+\subsection{Составляющие уравнения}
+
+Рассматриваются уравнения в словах с алфавитом переменных $\Xi$ и алфавитом
+констант $\Sigma$. Применение алгоритма Jez'а предполагает хранение
+дополнительной информации об уравнении: какие константы являются результатом
+сжатия блоков, какие переменные не могут быть пусты и т.д. Поэтому в Рефале
+уравнение представляется структурой данных \texttt{t.Eq}:
 \begin{Verbatim}
-  t.Eq ::= ((AreEqual (e.LHS) (e.RHS)) (e.Constrs) (e.Conds)).
+  t.Eq ::= ((AreEqual (e.LHS) (e.RHS)) (t.Constr*) (t.Cond*)),
 \end{Verbatim}
-Выражения \texttt{e.LHS} и \texttt{e.RHS} - сооответственно левая и правая
-части уравнения, состоящие из произвольного числа констант \texttt{t.Const} и
-переменных \texttt{t.Var}.
+где \texttt{e.LHS} и \texttt{e.RHS} содержат левую и правую части уравнения,
+\texttt{t.Constr} представляет ограничения на переменные, а \texttt{t.Cond}
+--- условия на константы.
+
+Выражения \texttt{e.LHS} и \texttt{e.RHS} состоят из произвольного числа
+\textit{переменных} и \textit{констант}, представляющихся структурами
+\texttt{t.Var} и \texttt{t.Const} соответственно. Нередко константы и переменные
+обобщённо называются \textit{элементами} типа \texttt{t.Elem}:
 \begin{Verbatim}
-  t.Const ::= (s.CHAR s.NUMBER);
-  t.Var ::= (Var s.CHAR).
+  t.Elem ::= t.Var | t.Elem,
+  t.Var ::= (Var s.CHAR),
+  t.Const ::= (s.CHAR s.NUMBER).
 \end{Verbatim}
-Выражение \texttt{e.Constrs} представляет \textit{ограничения на переменные}
-уравнения в конъюнктивной нормальной форме. Элементами дизъюнкций являются
-\textit{рестрикции} \texttt{t.Restr}. Рестрикции бывают \textit{суффиксными}
-\texttt{t.SuffixRestr}, \textit{префиксными} \texttt{t.PrefixRestr} и
-рестрикциями \textit{на пустоту} \texttt{t.EmptyRestr}:
+
+\subsection{Ограничения на переменные}
+
+Ограничения на переменные представляются структурой \texttt{t.Constr} и
+описываются в конъюнктивной нормальной форме. Литералами дизъюнкций являются
+рестрикции (отрицательные условия на переменные) типа \texttt{t.Restr},
+подразделяющиеся на краевые \texttt{t.BoundRestr} и рестрикции на пустоту
+\texttt{t.EmptyRestr}:
 \begin{Verbatim}
-  t.Restr ::= t.SuffixRestr | t.PrefixRestr | t.EmptyRestr;
-  t.SuffixRestr ::= (not t.Const ends t.Var);
-  t.PrefixRestr ::= (not t.Const starts t.Var);
+  t.Restr ::= t.BoundRestr | t.EmptyRestr.
+\end{Verbatim}
+
+\textit{Краевые} рестрикции бывают префиксными \texttt{t.PrefixRestr} и
+суффиксными \texttt{t.SuffixRestr}. Они указывают, на какие константы не может
+начинаться (кончаться) данная переменная.
+\begin{Verbatim}
+  t.BoundRestr ::= t.PrefixRestr | t.SuffixRestr,
+  t.PrefixRestr ::= (not t.Const starts t.Var),
+  t.SuffixRestr ::= (not t.Const ends t.Var).
+\end{Verbatim}
+
+Рестрикция \textit{на пустоту} \texttt{t.EmptyRestr} сообщает, как следует, о
+невозможности обращения данной переменной в пустое слово $\varepsilon$:
+\begin{Verbatim}
   t.EmptyRestr ::= (not empty t.Var).
 \end{Verbatim}
-Ограничение может включать в себя одну или две рестрикции и называться в
-соответствии с этим \textit{тривиальным} \texttt{t.TrivialConstr} или
-\textit{нетривиальным} \texttt{t.NonTrivialConstr}. Таким образом, существует
-четыре вида ограничений.
+
+Ограничения на переменные \texttt{t.Constr} могут содержать одну или две
+рестрикции, в соответствии с чем называются тривиальными
+\texttt{t.TrivialConstr} и нетривиальными \texttt{t.NonTrivialConstr}. В
+программе используется только четыре вида ограничений:
 \begin{Verbatim}
-  t.Constr ::= t.TrivialConstr | NonTrivialConstr;
-  t.TrivialConstr ::= (OR t.Restr);
+  t.Constr ::= t.TrivialConstr | t.NonTrivialConstr
+  t.TrivialConstr ::= (OR t.Restr),
   t.NonTrivialConstr ::= (OR t.SuffixRestr t.PrefixRestr).
 \end{Verbatim}
-Наконец, выражение \texttt{e.Conds} представляет \textit{условия на константы}.
-Константа может являться результатом сжатия в пару или в блок, поэтому
-выделяют два вида условий:
+
+Говоря далее "ограничения" мы, как правило, будем подразумевать именно
+тривиальные, если не оговорено противное, а также будем экстраполировать
+тип рестрикции на ограничение её содержащее: префиксное ограничение,
+ограничение на пустоту и т.д.
+
+\subsection{Условия на константы}
+
+\textit{Условие на константу} \texttt{t.Cond} содержит сжимаемые блоки и
+соотвествующую этому сжатию константу. Вообще, \textit{блок} \texttt{t.Block}
+представляется в виде
 \begin{Verbatim}
-  t.Cond ::= t.PairCond | t.BlockCond;
-  t.PairCond ::= (t.Const is t.SimpleBlock t.SimpleBlock);
-  t.BlockCond ::= (t.Const is t.ArbitaryBlock),
+  t.Block ::= (t.Const t.Exp* (const s.NUMBER)),
 \end{Verbatim}
-где блок \texttt{t.Block} есть степень константы с показателями
-\texttt{t.Exp}:
+где \texttt{t.Const} --- сжимаемая константа, \texttt{(const s.NUMBER)} ---
+обязательный константный показатель, а \texttt{t.Exp ::= (s.WORD s.NUMBER)}
+--- переменный показатель степени. Таким образом, условие на константу
+представляется в виде
 \begin{Verbatim}
-  t.Block ::= t.SimpleBlock | t.ArbitaryBlock;
-  t.SimpleBlock ::= (t.Const /* нет иных показателей */ (const 1));
-  t.ArbitaryBlock ::= (t.Const t.Exp* (const s.NUMBER));
-  t.Exp ::= (s.WORD s.NUMBER).
+  t.Cond ::= (t.Const is t.Block+)
+\end{Verbatim}
+В программе используется только два типа условий: \textit{парное условие}
+\texttt{t.PairCond} и \textit{условие на блок} \texttt{t.BlockCond}:
+\begin{Verbatim}
+  t.PairCond ::= (t.Const is (t.Const (const 1)) (t.Const (const 1))),
+  t.BlockCond ::= (t.Const is t.Block).
 \end{Verbatim}
 
+\subsection{Краевые элементы}
+
+Мы хотим применять \texttt{Pair}- и \texttt{Block}-сжатие не только к
+тривиальным константам, но и тем, что уже являются результатом сжатия в блоки.
+Для корректной обработки ограничений на переменные необходимо аккуратно
+отслеживать, на какие константы не может начинаться (кончаться) та или иная
+переменная.
+
+Пусть $\alpha, \gamma \in \Sigma$. Скажем, что $\alpha \in First(\gamma)$, если
+существует цепочка условий на константы такая, что
+\begin{displaymath}
+  \gamma = \beta_1^{i_1} B_1,
+  \beta_1 = \beta_2^{i_2} B_2,
+  \dots,
+  \beta_{n-1} = \alpha^{i_n} B_n,
+\end{displaymath}
+где $\beta_i \in \Sigma, i = 1, 2, \dots, n - 1$, и $B_j \subset \Sigma, j = 1,
+2, \dots, n$. Симметрично определяется множество $Last$-элементов константы.
+
+Иногда удобно использовать обобщение введённых выше понятий: будем
+говорить, что константа $\alpha$ является \textbf{краевым} элементом константы
+$\gamma$, если $\alpha \in First(\gamma)$ или $\alpha \in Last(\gamma)$.
+Обозначение: $\alpha \in Bound(\gamma)$.
+
+\subsection{Слабые и сильные ограничения}
+
+В соответствие с введённым выше понятием краевого элемента, для данной
+переменной $X$ и константы $\gamma$ мы можем ввести \textit{иерархические
+отношения} на множествах префиксных и суффиксных ограничений $X$ с константами
+$First(\gamma)$ и $Last(\gamma)$ соответственно.
+
+Пусть даны два таких ограничения одного типа с константами $\alpha$ и $\beta$.
+Если $\alpha \in Bound(\beta)$, то $\alpha$-ограничение (то, что с константой
+$\alpha$) является \textbf{более сильным}. В то же время $\beta$-ограничение
+есть \textbf{более слабое} по сравнению с первым.
+
+Имеет смысл хранить в уравнении лишь самые сильные ограничения.
+
+\subsection{Избыточные рестрикции и условия}
+
+В результате некоторых действий какие-то рестрикции могут стать неактуальными,
+вследствие чего их желательно удалять из уравнения.
+
+Скажем, что рестрикция \textbf{избыточная}, если участвующей в ней константы
+нет в уравнении, а также в правых частях условий на константы.
+
+Как и рестрикция, условие (на константу) также может стать \textbf{избыточным}.
+Это происходит в двух случаях:
+\begin{itemize}
+  \item константа в левой части условия не участвует в уравнении и не является
+  $Bound$-элементом какой-либо другой константы;
+  \item условие имеет парный тип, обеих констант его правой части нет
+  в уравнении и они не являются левыми частями каких-либо других условий.
+\end{itemize}
+
+\subsection{Нормальное уравнение}
+
+Скажем, что уравнение \textbf{несократимо}, если его левая и правая части не
+имеют совпадающих префиксов и суффиксов.
+
+Будем называть уравнение \textbf{нормальным}, если оно несократимо, не содержит
+слабых (краевых) ограничений и избыточных рестрикций и условий. Также
+потребуем, чтобы в нормальном уравнении все ограничения были отсортированы,
+равно как и показатели степеней \texttt{t.Exp} условий на блок.
+
+Нормальные уравнения представляют особый интерес для нас. Именно такие уравнения
+возращают и ожидают получить на вход функции \texttt{Pick}, \texttt{SubstIndex},
+\texttt{PairComp} и \texttt{BlockComp}.
+
 \end{document}
+
